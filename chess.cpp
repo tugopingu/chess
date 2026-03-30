@@ -7,6 +7,8 @@
 
 bool whitesMove = true;
 int halfMove = 0;
+int fiftyMoveCounter = 0;
+bool running = true;
 
 // It would segfault without this if invalid input was entered. This is the only
 // part of code I took from GPT but it still isn't verbatim. Checks if the move
@@ -136,6 +138,12 @@ void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
   // Increment counter
   whitesMove = !whitesMove;
   halfMove++;
+  if (std::tolower(board[fromRank][fromFile].type) == 'p' ||
+      board[toRank][toFile].type != '.') {
+    fiftyMoveCounter = 0;
+  } else {
+    fiftyMoveCounter++;
+  }
   // std::cout << "makeMove triggered" << std::endl; // DEBUG
 }
 
@@ -430,6 +438,7 @@ bool anyLegalMoves() {
   Piece tempBoard[8][8];
   int currentHalfMove = halfMove;
   bool move = whitesMove;
+  int currentFiftyMoveCounter = fiftyMoveCounter;
   for (int i = 0; i < 8; i++) {
     for (int j = 0; j < 8; j++) {
       if (board[i][j].type == '.') {
@@ -455,6 +464,7 @@ bool anyLegalMoves() {
           }
           halfMove = currentHalfMove;
           whitesMove = move;
+          fiftyMoveCounter = currentFiftyMoveCounter;
           if (succeeded) {
             updateCheckMap();
             // std::cout << "anyLegalMoves() caught a legal move with these "
@@ -838,7 +848,6 @@ void printBoard() {
 };
 
 int main() {
-  bool running = true;
   fillBoard();
   setup();
   std::cout << "Welcome to chess! No quitting mechanism yet, CTRL+C to quit."
@@ -860,15 +869,20 @@ int main() {
       std::cout << "Game ended" << std::endl;
       printBoard();
       if (board[kingRank(true)][kingFile(true)].inBlacksCheck) {
-        std::cout << "Black wins" << std::endl;
+        std::cout << "Black wins by mate" << std::endl;
         running = false;
       } else if (board[kingRank(false)][kingFile(false)].inWhitesCheck) {
-        std::cout << "White wins" << std::endl;
+        std::cout << "White wins by mate" << std::endl;
         running = false;
       } else {
-        std::cout << "Stalemate" << std::endl;
+        std::cout << "Draw by stalemate" << std::endl;
         running = false;
       }
+    }
+    if (fiftyMoveCounter >= 100) {
+      running = false;
+      printBoard();
+      std::cout << "Game ended with a draw by the 50 move rule" << std::endl;
     }
     // This piece of gibberish is apparently an escape code for clearing the
     // terminal
