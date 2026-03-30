@@ -4,11 +4,13 @@
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <vector>
 
 bool whitesMove = true;
 int halfMove = 0;
 int fiftyMoveCounter = 0;
 bool running = true;
+std::vector<std::string> positionHistory;
 
 // It would segfault without this if invalid input was entered. This is the only
 // part of code I took from GPT but it still isn't verbatim. Checks if the move
@@ -101,8 +103,12 @@ int kingFile(bool white) {
 // square, except the hasntMoved boolean value
 void updateCheckMap();
 
+void recordPosition();
+
 void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
   transaction();
+  bool isCapture = board[toRank][toFile].type != '.';
+  bool isPawnMove = std::tolower(board[fromRank][fromFile].type) == 'p';
   board[toRank][toFile] = board[fromRank][fromFile];
   board[fromRank][fromFile] = Piece();
   board[toRank][toFile].rank = toRank;
@@ -138,12 +144,12 @@ void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
   // Increment counter
   whitesMove = !whitesMove;
   halfMove++;
-  if (std::tolower(board[fromRank][fromFile].type) == 'p' ||
-      board[toRank][toFile].type != '.') {
+  if (isPawnMove || isCapture) {
     fiftyMoveCounter = 0;
   } else {
     fiftyMoveCounter++;
   }
+  recordPosition();
   // std::cout << "makeMove triggered" << std::endl; // DEBUG
 }
 
@@ -433,9 +439,33 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
 
 // Updates the check state of the board, copied mostly from the checkMove
 // function
+bool threefoldRepetition() {
+  for (int i = 0; i < positionHistory.size(); i++) {
+    int positionOccurences = 0;
+    for (int j = i; j < positionHistory.size(); j++) {
+      if (positionHistory.at(i) == positionHistory.at(j)) {
+        positionOccurences++;
+      }
+    }
+    if (positionOccurences >= 3) {
+      return true;
+    }
+  }
+  return false;
+}
+void recordPosition() {
+  std::string currentPosition = "";
+  for (int i = 0; i < 8; i++) {
+    for (int j = 0; j < 8; j++) {
+      currentPosition.push_back(board[i][j].type);
+    }
+  }
+  positionHistory.push_back(currentPosition);
+}
 
 bool anyLegalMoves() {
   Piece tempBoard[8][8];
+  std::vector<std::string> currentPositionHistory = positionHistory;
   int currentHalfMove = halfMove;
   bool move = whitesMove;
   int currentFiftyMoveCounter = fiftyMoveCounter;
@@ -465,6 +495,7 @@ bool anyLegalMoves() {
           halfMove = currentHalfMove;
           whitesMove = move;
           fiftyMoveCounter = currentFiftyMoveCounter;
+          positionHistory = currentPositionHistory;
           if (succeeded) {
             updateCheckMap();
             // std::cout << "anyLegalMoves() caught a legal move with these "
@@ -829,6 +860,7 @@ void setup() {
   board[7][5] = Piece(7, 5, 'B', true, true);
   board[7][6] = Piece(7, 6, 'N', true, true);
   board[7][7] = Piece(7, 7, 'R', true, true);
+  recordPosition();
 };
 
 // Iterates over every square in the board and prints its type
@@ -864,6 +896,20 @@ int main() {
     if (itsSafe(sourceSquare) && itsSafe(targetSquare)) {
       humanMakeMove(sourceSquare, targetSquare);
     }
+    if (threefoldRepetition()) {
+      std::cout << "\033[2J\033[1;1H" << std::flush;
+      printBoard();
+      running = false;
+      std::cout << "Game ended with a draw by threefold repetition"
+                << std::endl;
+    }
+    if (fiftyMoveCounter >= 100) {
+      std::cout << "\033[2J\033[1;1H" << std::flush;
+      printBoard();
+      running = false;
+      std::cout << "Game ended with a draw by the 50 move rule" << std::endl;
+    }
+
     if (anyLegalMoves() == false) {
       std::cout << "\033[2J\033[1;1H" << std::flush;
       std::cout << "Game ended" << std::endl;
@@ -878,11 +924,6 @@ int main() {
         std::cout << "Draw by stalemate" << std::endl;
         running = false;
       }
-    }
-    if (fiftyMoveCounter >= 100) {
-      running = false;
-      printBoard();
-      std::cout << "Game ended with a draw by the 50 move rule" << std::endl;
     }
     // This piece of gibberish is apparently an escape code for clearing the
     // terminal
