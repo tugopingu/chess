@@ -95,9 +95,10 @@ int kingFile(bool white) {
   std::cout << "Fatal error: King doesn't exist" << std::endl;
   return 0;
 }
-
 // Transfers all properties of the piece from the source square to the target
 // square, except the hasntMoved boolean value
+void updateCheckMap();
+
 void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
   transaction();
   board[toRank][toFile] = board[fromRank][fromFile];
@@ -105,14 +106,17 @@ void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
   board[toRank][toFile].rank = toRank;
   board[toRank][toFile].file = toFile;
   board[toRank][toFile].hasntMoved = false;
+  updateCheckMap();
   if (whitesMove) {
     if (board[kingRank(true)][kingFile(true)].inBlacksCheck) {
       rollback();
+      // std::cout << "Impossible move." << std::endl;
       return;
     }
   } else {
     if (board[kingRank(false)][kingFile(false)].inWhitesCheck) {
       rollback();
+      // std::cout << "Impossible move." << std::endl;
       return;
     }
   }
@@ -132,7 +136,7 @@ void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
   // Increment counter
   whitesMove = !whitesMove;
   halfMove++;
-  // std::cout << "makeMove triggered" << std::endl; //DEBUG
+  // std::cout << "makeMove triggered" << std::endl; // DEBUG
 }
 
 // The brains of the code, checks all moves for validity
@@ -145,6 +149,7 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
       (board[toRank][toFile].type != '.')) {
     return;
   }
+  // std::cout << "Friendly fire capture check passed" << std::endl;
   if (fromRank < 0 || fromRank > 7 || fromFile < 0 || fromFile > 7 ||
       toRank < 0 || toRank > 7 || toFile < 0 || toFile > 7) {
     return;
@@ -152,7 +157,7 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
   if (board[fromRank][fromFile].isWhite != whitesMove) {
     return;
   }
-  // std::cout << "checkMove general move rules passed" << std::endl; // DEBUG
+  // std:cout << "checkMove general move rules passed" << std::endl; // DEBUG
   switch (std::tolower(board[fromRank][fromFile].type)) {
   // Rook check: Checks if the target square matches the rank or file with the
   // source square, then iterates over the squares in between to check if they
@@ -420,6 +425,49 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
 
 // Updates the check state of the board, copied mostly from the checkMove
 // function
+
+bool anyLegalMoves() {
+  Piece tempBoard[8][8];
+  int currentHalfMove = halfMove;
+  bool move = whitesMove;
+  for (int i = 0; i < 8; i++) {
+    for (int j = 0; j < 8; j++) {
+      if (board[i][j].type == '.') {
+        continue;
+      }
+      if (board[i][j].isWhite != whitesMove) {
+        continue;
+      }
+      for (int k = 0; k < 8; k++) {
+        for (int l = 0; l < 8; l++) {
+          for (int rank = 0; rank < 8; rank++) {
+            for (int file = 0; file < 8; file++) {
+              tempBoard[rank][file] = board[rank][file];
+            }
+          }
+          updateCheckMap();
+          checkMove(i, j, k, l);
+          bool succeeded = (halfMove != currentHalfMove);
+          for (int rank = 0; rank <= 7; rank++) {
+            for (int file = 0; file <= 7; file++) {
+              board[rank][file] = tempBoard[rank][file];
+            }
+          }
+          halfMove = currentHalfMove;
+          whitesMove = move;
+          if (succeeded) {
+            updateCheckMap();
+            // std::cout << "anyLegalMoves() caught a legal move with these "
+            //"parameters: "; // DEBUG
+            // std::cout << i << j << k << l << std::endl;
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
 
 void assignCheck(int rank, int file, bool white) {
   if (rank <= 7 && rank >= 0 && file <= 7 && file >= 0) {
@@ -730,12 +778,12 @@ void humanMakeMove(std::string source, std::string target) {
   // ASCII value the overloaded algebraic notation to array conversion
   // function would do the wrong conversion, returning -58 as the file for 1.
   // e4. Gotta keep these in mind when implementing AI suggestions DEBUGGING
-  /*std::cout << "humanMakeMove triggered" << std::endl;
-  std::cout << "Passing these parameters to checkMove function: " << fromRank
+  // td::cout << "humanMakeMove triggered" << std::endl;
+  /*std::cout << "Passing these parameters to checkMove function: " << fromRank
             << std::endl
             << fromFile << std::endl
             << toRank << std::endl
-            << toFile << std::endl; */
+            << toFile << std::endl;*/
   checkMove(fromRank, fromFile, toRank, toFile);
 }
 
@@ -763,14 +811,14 @@ void setup() {
     board[6][i] = Piece(6, i, 'P', true, true);
   }
 
-  board[7][0] = Piece(6, 0, 'R', true, true);
-  board[7][1] = Piece(6, 1, 'N', true, true);
-  board[7][2] = Piece(6, 2, 'B', true, true);
-  board[7][3] = Piece(6, 3, 'Q', true, true);
-  board[7][4] = Piece(6, 4, 'K', true, true);
-  board[7][5] = Piece(6, 5, 'B', true, true);
-  board[7][6] = Piece(6, 6, 'N', true, true);
-  board[7][7] = Piece(6, 7, 'R', true, true);
+  board[7][0] = Piece(7, 0, 'R', true, true);
+  board[7][1] = Piece(7, 1, 'N', true, true);
+  board[7][2] = Piece(7, 2, 'B', true, true);
+  board[7][3] = Piece(7, 3, 'Q', true, true);
+  board[7][4] = Piece(7, 4, 'K', true, true);
+  board[7][5] = Piece(7, 5, 'B', true, true);
+  board[7][6] = Piece(7, 6, 'N', true, true);
+  board[7][7] = Piece(7, 7, 'R', true, true);
 };
 
 // Iterates over every square in the board and prints its type
@@ -790,11 +838,12 @@ void printBoard() {
 };
 
 int main() {
+  bool running = true;
   fillBoard();
   setup();
   std::cout << "Welcome to chess! No quitting mechanism yet, CTRL+C to quit."
             << '\n';
-  while (true) {
+  while (running) {
     printBoard();
     std::cout << "Where is the piece?" << '\n';
     std::string sourceSquare;
@@ -806,9 +855,26 @@ int main() {
     if (itsSafe(sourceSquare) && itsSafe(targetSquare)) {
       humanMakeMove(sourceSquare, targetSquare);
     }
+    if (anyLegalMoves() == false) {
+      std::cout << "\033[2J\033[1;1H" << std::flush;
+      std::cout << "Game ended" << std::endl;
+      printBoard();
+      if (board[kingRank(true)][kingFile(true)].inBlacksCheck) {
+        std::cout << "Black wins" << std::endl;
+        running = false;
+      } else if (board[kingRank(false)][kingFile(false)].inWhitesCheck) {
+        std::cout << "White wins" << std::endl;
+        running = false;
+      } else {
+        std::cout << "Stalemate" << std::endl;
+        running = false;
+      }
+    }
     // This piece of gibberish is apparently an escape code for clearing the
     // terminal
-    std::cout << "\033[2J\033[1;1H" << std::flush;
+    if (running) {
+      std::cout << "\033[2J\033[1;1H" << std::flush;
+    }
   }
   return 0;
 }
