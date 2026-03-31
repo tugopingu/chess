@@ -10,6 +10,7 @@ bool whitesMove = true;
 int halfMove = 0;
 int fiftyMoveCounter = 0;
 bool running = true;
+bool realMove = true;
 std::vector<std::string> positionHistory;
 
 // It would segfault without this if invalid input was entered. This is the only
@@ -130,7 +131,7 @@ void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
   }
   // Pawn promotion check
   if (std::tolower(board[toRank][toFile].type) == 'p' &&
-      (toRank == 0 || toRank == 7)) {
+      (toRank == 0 || toRank == 7) && realMove) {
     std::cout << "Which piece do you want to promote to? (r, n, q, b)" << '\n';
     char promoteTo;
     do {
@@ -437,8 +438,29 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
   }
 }
 
-// Updates the check state of the board, copied mostly from the checkMove
-// function
+bool insufficientMaterial() {
+  int blackKnightOrBishopCount = 0;
+  int whiteKnightOrBishopCount = 0;
+  for (int i = 0; i < 8; i++) {
+    for (int j = 0; j < 8; j++) {
+      if (std::tolower(board[i][j].type) == 'q' ||
+          std::tolower(board[i][j].type) == 'r' ||
+          std::tolower(board[i][j].type) == 'p') {
+        return false;
+      } else if (board[i][j].type == 'n' || board[i][j].type == 'b') {
+        blackKnightOrBishopCount++;
+      } else if (board[i][j].type == 'N' || board[i][j].type == 'B') {
+        whiteKnightOrBishopCount++;
+      }
+    }
+  }
+  if (whiteKnightOrBishopCount >= 2 || blackKnightOrBishopCount >= 2) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 bool threefoldRepetition() {
   for (int i = 0; i < positionHistory.size(); i++) {
     int positionOccurences = 0;
@@ -465,6 +487,7 @@ void recordPosition() {
 
 bool anyLegalMoves() {
   Piece tempBoard[8][8];
+  realMove = false;
   std::vector<std::string> currentPositionHistory = positionHistory;
   int currentHalfMove = halfMove;
   bool move = whitesMove;
@@ -521,6 +544,9 @@ void assignCheck(int rank, int file, bool white) {
 }
 // I'm so dumb I should've implemented this function before getting to the
 // pawn and king. Would've saved like 100 lines of code and potential bugs
+
+// Updates the check state of the board, copied mostly from the checkMove
+// function
 void updateCheckMap() {
   for (int rank = 0; rank <= 7; rank++) {
     for (int file = 0; file <= 7; file++) {
@@ -885,6 +911,7 @@ int main() {
   std::cout << "Welcome to chess! No quitting mechanism yet, CTRL+C to quit."
             << '\n';
   while (running) {
+    realMove = true;
     printBoard();
     std::cout << "Where is the piece?" << '\n';
     std::string sourceSquare;
@@ -924,6 +951,13 @@ int main() {
         std::cout << "Draw by stalemate" << std::endl;
         running = false;
       }
+    }
+    if (insufficientMaterial()) {
+      running = false;
+      std::cout << "\033[2J\033[1;1H" << std::flush;
+      printBoard();
+      std::cout << "Game ended with a draw by insufficient mating material"
+                << std::endl;
     }
     // This piece of gibberish is apparently an escape code for clearing the
     // terminal
