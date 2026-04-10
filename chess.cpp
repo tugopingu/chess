@@ -1,26 +1,76 @@
 // Licensed with GPL 3.0
+#include <SFML/Audio.hpp>
+#include <SFML/Audio/SoundBuffer.hpp>
+#include <SFML/Graphics.hpp>
+#include <SFML/Graphics/Color.hpp>
+#include <SFML/Graphics/Rect.hpp>
+#include <SFML/Graphics/RectangleShape.hpp>
+#include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/System/Vector2.hpp>
+#include <SFML/Window/Mouse.hpp>
+#include <SFML/Window/VideoMode.hpp>
 #include <cctype>
 #include <cmath>
-#include <iostream>
-#include <ostream>
 #include <string>
 #include <vector>
+
+const int WIDTH = 800;
+const int SQ_SIDE = 100;
+const int PIECE_OFFSET = (100 - 75) / 2;
+
+struct Color {
+  int r;
+  int g;
+  int b;
+  Color(int r, int g, int b) {
+    this->r = r;
+    this->g = g;
+    this->b = b;
+  }
+};
+
+sf::Texture p, r, k, q, b, n;
+sf::Texture P, R, K, Q, B, N;
+
+void loadTextures() {
+  p.loadFromFile("./assets/png/black/p.png");
+  r.loadFromFile("./assets/png/black/r.png");
+  k.loadFromFile("./assets/png/black/k.png");
+  q.loadFromFile("./assets/png/black/q.png");
+  b.loadFromFile("./assets/png/black/b.png");
+  n.loadFromFile("./assets/png/black/n.png");
+
+  P.loadFromFile("./assets/png/white/P.png");
+  R.loadFromFile("./assets/png/white/R.png");
+  K.loadFromFile("./assets/png/white/K.png");
+  Q.loadFromFile("./assets/png/white/Q.png");
+  B.loadFromFile("./assets/png/white/B.png");
+  N.loadFromFile("./assets/png/white/N.png");
+}
+const Color lightSquare(240, 217, 181);
+const Color darkSquare(181, 136, 99);
+const Color lightHighlight(205, 210, 106);
+const Color darkHighlight(170, 162, 58);
+const Color darkSelect(100, 110, 64);
+const Color lightSelect(174, 177, 135);
+
+sf::SoundBuffer buffer;
+sf::Sound sound;
+
+sf::Font notoSans;
 
 bool whitesMove = true;
 int halfMove = 0;
 int fiftyMoveCounter = 0;
-bool running = true;
 bool realMove = true;
+bool dragging = false;
+int lastFromFile;
+int lastFromRank;
+int lastToRank;
+int lastToFile;
+bool gameOverSoundAlreadyPlayed;
+bool waitingForPromotion = false;
 std::vector<std::string> positionHistory;
-
-// It would segfault without this if invalid input was entered. This is the only
-// part of code I took from GPT but it still isn't verbatim. Checks if the move
-// string is 2 in length, the first character is between a-h and the second
-// character is between 1-8
-bool itsSafe(const std::string &move) {
-  return move.size() == 2 && std::tolower(move[0]) >= 'a' &&
-         std::tolower(move[0]) <= 'h' && move[1] >= '1' && move[1] <= '8';
-}
 
 // The piece class used for the board matrix. Provides a constructor for
 // creating and moving pieces.
@@ -75,6 +125,8 @@ void rollback() {
   }
 }
 
+// Returns the position of the king on the board to make the code about mate
+// cleaner
 int kingRank(bool white) {
   for (int i = 0; i <= 7; i++) {
     for (int j = 0; j <= 7; j++) {
@@ -84,7 +136,6 @@ int kingRank(bool white) {
       }
     }
   }
-  std::cout << "Fatal error: King doesn't exist" << std::endl;
   return 0;
 }
 
@@ -97,17 +148,101 @@ int kingFile(bool white) {
       }
     }
   }
-  std::cout << "Fatal error: King doesn't exist" << std::endl;
   return 0;
 }
-// Transfers all properties of the piece from the source square to the target
-// square, except the hasntMoved boolean value
+
 void updateCheckMap();
 
 void recordPosition();
 
+// Displays a GUI overlay to let the user select which piece to promote their
+// pawn to. Runs every frame, returns a space character if no choice is made.
+char promotionBox(sf::RenderWindow &window, bool clicked, bool isWhite,
+                  int file) {
+  sf::RectangleShape grayOverlay;
+  grayOverlay.setSize(sf::Vector2f(800, 800));
+  grayOverlay.setPosition(0, 0);
+  grayOverlay.setFillColor(sf::Color(0, 0, 0, 128));
+  window.draw(grayOverlay);
+  sf::Sprite queen, knight, rook, bishop;
+  if (isWhite) {
+    queen.setTexture(Q);
+    knight.setTexture(N);
+    rook.setTexture(R);
+    bishop.setTexture(B);
+    queen.setPosition(sf::Vector2f(file * SQ_SIDE, 0 * SQ_SIDE));
+    knight.setPosition(sf::Vector2f(file * SQ_SIDE, 1 * SQ_SIDE));
+    rook.setPosition(sf::Vector2f(file * SQ_SIDE, 2 * SQ_SIDE));
+    bishop.setPosition(sf::Vector2f(file * SQ_SIDE, 3 * SQ_SIDE));
+  } else {
+    queen.setTexture(q);
+    knight.setTexture(n);
+    rook.setTexture(r);
+    bishop.setTexture(b);
+    queen.setPosition(sf::Vector2f(file * SQ_SIDE, 7 * SQ_SIDE));
+    knight.setPosition(sf::Vector2f(file * SQ_SIDE, 6 * SQ_SIDE));
+    rook.setPosition(sf::Vector2f(file * SQ_SIDE, 5 * SQ_SIDE));
+    bishop.setPosition(sf::Vector2f(file * SQ_SIDE, 4 * SQ_SIDE));
+  }
+  sf::RectangleShape menu;
+  menu.setSize(sf::Vector2f(100, 400));
+  menu.setFillColor(sf::Color(200, 200, 200));
+  int menuYPos = isWhite ? 0 : 400;
+  menu.setPosition(sf::Vector2f(file * SQ_SIDE, menuYPos));
+  window.draw(menu);
+  sf::RectangleShape highlight;
+  highlight.setSize(sf::Vector2f(100, 100));
+  highlight.setPosition(sf::Vector2f(
+      static_cast<float>((sf::Mouse::getPosition(window).x / SQ_SIDE) *
+                         SQ_SIDE),
+      static_cast<float>((sf::Mouse::getPosition(window).y / SQ_SIDE) *
+                         SQ_SIDE)));
+  if (menu.getGlobalBounds().contains(
+          window.mapPixelToCoords(sf::Mouse::getPosition(window)))) {
+    window.draw(highlight);
+  }
+  if (queen.getGlobalBounds().contains(
+          window.mapPixelToCoords(sf::Mouse::getPosition(window)))) {
+    if (clicked) {
+      waitingForPromotion = false;
+      return 'q';
+    }
+  }
+  if (knight.getGlobalBounds().contains(
+          window.mapPixelToCoords(sf::Mouse::getPosition(window)))) {
+    if (clicked) {
+      waitingForPromotion = false;
+      return 'n';
+    }
+  }
+  if (rook.getGlobalBounds().contains(
+          window.mapPixelToCoords(sf::Mouse::getPosition(window)))) {
+    if (clicked) {
+      waitingForPromotion = false;
+      return 'r';
+    }
+  }
+  if (bishop.getGlobalBounds().contains(
+          window.mapPixelToCoords(sf::Mouse::getPosition(window)))) {
+    if (clicked) {
+      waitingForPromotion = false;
+      return 'b';
+    }
+  }
+
+  window.draw(queen);
+  window.draw(knight);
+  window.draw(rook);
+  window.draw(bishop);
+  return ' ';
+}
+
+// Transfers the piece from the source square to the target square to make the
+// move. Checks if there is a pawn promotion or an illegal move, and if it is
+// the case, rollsback the board to the state before the illegal move
 void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
   transaction();
+  bool isWhiteMove = board[fromRank][fromFile].isWhite;
   bool isCapture = board[toRank][toFile].type != '.';
   bool isPawnMove = std::tolower(board[fromRank][fromFile].type) == 'p';
   board[toRank][toFile] = board[fromRank][fromFile];
@@ -132,15 +267,7 @@ void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
   // Pawn promotion check
   if (std::tolower(board[toRank][toFile].type) == 'p' &&
       (toRank == 0 || toRank == 7) && realMove) {
-    std::cout << "Which piece do you want to promote to? (r, n, q, b)" << '\n';
-    char promoteTo;
-    do {
-      std::cin >> promoteTo;
-      promoteTo = std::tolower(promoteTo);
-    } while (promoteTo != 'q' && promoteTo != 'b' && promoteTo != 'r' &&
-             promoteTo != 'n');
-    board[toRank][toFile].type =
-        board[toRank][toFile].isWhite ? std::toupper(promoteTo) : promoteTo;
+    waitingForPromotion = true;
   }
   // Increment counter
   whitesMove = !whitesMove;
@@ -151,11 +278,29 @@ void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
     fiftyMoveCounter++;
   }
   recordPosition();
+  if (realMove) {
+    lastFromRank = fromRank;
+    lastFromFile = fromFile;
+    lastToRank = toRank;
+    lastToFile = toFile;
+    if (isCapture) {
+      buffer.loadFromFile("./assets/ogg/Capture.ogg");
+    } else {
+      buffer.loadFromFile("./assets/ogg/Move.ogg");
+    }
+    sound.setBuffer(buffer);
+    sound.play();
+  }
   // std::cout << "makeMove triggered" << std::endl; // DEBUG
 }
 
-// The brains of the code, checks all moves for validity
+// Checks if the move is valid. If it is, it passes the values onto the makeMove
+// function
 void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
+  int currentHalfMove = halfMove;
+  if (waitingForPromotion) {
+    return;
+  }
   // Couple general checks that can be used for the movement for any piece
   if ((fromRank == toRank) && (fromFile == toFile)) {
     return;
@@ -342,12 +487,7 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
       makeMove(fromRank, fromFile, toRank, toFile);
     }
     break;
-  // The king has no castling currently, nor illegal move preventions. Just
-  // checks if distance to the square in either the x or y direction is equal or
-  // less than 1. The general check before the switch handles if both distances
-  // are 0
-  // Added castling and illegal move prevention, only thing left to make this
-  // script complete chess is stalemate and checkmate
+  // King logic
   case 'k':
     if (std::abs(fromRank - toRank) <= 1 && std::abs(fromFile - toFile) <= 1) {
       makeMove(fromRank, fromFile, toRank, toFile);
@@ -376,6 +516,12 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
           whitesMove = !whitesMove;
         }
       }
+      if (realMove) {
+        lastFromRank = fromRank;
+        lastFromFile = fromFile;
+        lastToRank = toRank;
+        lastToFile = toFile;
+      }
     }
     if (toFile == 2 && toRank == fromRank &&
         board[fromRank][fromFile].hasntMoved && board[fromRank][0].hasntMoved &&
@@ -398,6 +544,12 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
           halfMove--;
           whitesMove = !whitesMove;
         }
+      }
+      if (realMove) {
+        lastFromRank = fromRank;
+        lastFromFile = fromFile;
+        lastToRank = toRank;
+        lastToFile = toFile;
       }
     }
     break;
@@ -432,12 +584,21 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
       if (board[toRank][toFile].enPassant == halfMove) {
         makeMove(fromRank, fromFile, toRank, toFile);
         board[toRank + colorMult][toFile] = Piece();
+        if (realMove) {
+          buffer.loadFromFile("./assets/ogg/Capture.ogg");
+          sound.setBuffer(buffer);
+          sound.play();
+        }
       }
     }
     break;
   }
 }
 
+// Returns a boolean value if it is a draw caused by insufficient material.
+// Checks if there are any queens, rook or pawns. If none, it checks if both
+// players have less than 2 knights or bishops. If it is the case, it returns
+// true for draw.
 bool insufficientMaterial() {
   int blackKnightOrBishopCount = 0;
   int whiteKnightOrBishopCount = 0;
@@ -461,6 +622,8 @@ bool insufficientMaterial() {
   }
 }
 
+// Uses the position history to check if there are three matching elements,
+// which is a threefold repetition
 bool threefoldRepetition() {
   for (int i = 0; i < positionHistory.size(); i++) {
     int positionOccurences = 0;
@@ -475,6 +638,9 @@ bool threefoldRepetition() {
   }
   return false;
 }
+
+// Adds the current state of the board to the position history string vector,
+// later to be used for checking draw by threefold repetition
 void recordPosition() {
   std::string currentPosition = "";
   for (int i = 0; i < 8; i++) {
@@ -485,7 +651,13 @@ void recordPosition() {
   positionHistory.push_back(currentPosition);
 }
 
+// Brute forces moves to find if there are no legal moves, which is checkmate or
+// stalemate. It operates on the real board and rolls back the board to the
+// previous state to not change the state of the board
 bool anyLegalMoves() {
+  if (waitingForPromotion) {
+    return true;
+  }
   Piece tempBoard[8][8];
   realMove = false;
   std::vector<std::string> currentPositionHistory = positionHistory;
@@ -533,6 +705,8 @@ bool anyLegalMoves() {
   return false;
 }
 
+// Used by the updateCheckMap function to cleanly assign checks to the squares
+// of the board
 void assignCheck(int rank, int file, bool white) {
   if (rank <= 7 && rank >= 0 && file <= 7 && file >= 0) {
     if (white) {
@@ -542,8 +716,6 @@ void assignCheck(int rank, int file, bool white) {
     }
   }
 }
-// I'm so dumb I should've implemented this function before getting to the
-// pawn and king. Would've saved like 100 lines of code and potential bugs
 
 // Updates the check state of the board, copied mostly from the checkMove
 // function
@@ -761,6 +933,8 @@ void updateCheckMap() {
         }
         break;
       case 'n':
+        // Should have implemented the assignCheck function earlier, what is
+        // this?
         if (board[i][j].isWhite) {
           if (i + 2 <= 7 && j + 1 <= 7) {
             board[i + 2][j + 1].inWhitesCheck = true;
@@ -834,26 +1008,6 @@ void updateCheckMap() {
   }
 }
 
-// Converts algebraic notation to matrix indexes using the conversion
-// functions and then passes the values onto the move checking function
-void humanMakeMove(std::string source, std::string target) {
-  int fromRank = rankConv(source[1]);
-  int fromFile = fileConv(static_cast<char>(std::tolower(source[0])));
-  int toRank = rankConv(target[1]);
-  int toFile = fileConv(static_cast<char>(std::tolower(target[0])));
-  // Without the static cast, due to the std::tolower() function returning the
-  // ASCII value the overloaded algebraic notation to array conversion
-  // function would do the wrong conversion, returning -58 as the file for 1.
-  // e4. Gotta keep these in mind when implementing AI suggestions DEBUGGING
-  // td::cout << "humanMakeMove triggered" << std::endl;
-  /*std::cout << "Passing these parameters to checkMove function: " << fromRank
-            << std::endl
-            << fromFile << std::endl
-            << toRank << std::endl
-            << toFile << std::endl;*/
-  checkMove(fromRank, fromFile, toRank, toFile);
-}
-
 // Places empty square instances in every space of the board matrix
 void fillBoard() {
   for (int i = 0; i < 8; i++) {
@@ -889,80 +1043,475 @@ void setup() {
   recordPosition();
 };
 
-// Iterates over every square in the board and prints its type
-void printBoard() {
+// Displays the squares on the board before the pieces are drawn
+void displayBackground(sf::RenderWindow &window) {
   for (int i = 0; i < 8; i++) {
     for (int j = 0; j < 8; j++) {
-      std::cout << board[i][j].type << ' ';
+      sf::RectangleShape square;
+      square.setSize(sf::Vector2f(SQ_SIDE, SQ_SIDE));
+      square.setPosition(i * SQ_SIDE, j * SQ_SIDE);
+      if ((i + j) % 2 == 0) {
+        square.setFillColor(
+            sf::Color(lightSquare.r, lightSquare.g, lightSquare.b));
+      } else {
+        square.setFillColor(
+            sf::Color(darkSquare.r, darkSquare.g, darkSquare.b));
+      }
+      window.draw(square);
     }
-    // Prints the ranks
-    std::cout << rankConv(i) << '\n';
   }
-  // Prints the files
-  for (int k = 0; k < 8; k++) {
-    std::cout << fileConv(k) << ' ';
+}
+
+// Draws the pieces on the window
+void displayBoard(sf::RenderWindow &window) {
+  for (int i = 0; i < 8; i++) {
+    for (int j = 0; j < 8; j++) {
+      sf::Sprite piece;
+      char type = board[i][j].type;
+      switch (type) {
+      case 'p':
+        piece.setTexture(p);
+        break;
+      case 'P':
+        piece.setTexture(P);
+        break;
+      case 'r':
+        piece.setTexture(r);
+        break;
+      case 'R':
+        piece.setTexture(R);
+        break;
+      case 'q':
+        piece.setTexture(q);
+        break;
+      case 'Q':
+        piece.setTexture(Q);
+        break;
+      case 'n':
+        piece.setTexture(n);
+        break;
+      case 'N':
+        piece.setTexture(N);
+        break;
+      case 'b':
+        piece.setTexture(b);
+        break;
+      case 'B':
+        piece.setTexture(B);
+        break;
+      case 'k':
+        piece.setTexture(k);
+        break;
+      case 'K':
+        piece.setTexture(K);
+        break;
+      }
+      piece.setPosition(j * SQ_SIDE, i * SQ_SIDE);
+      window.draw(piece);
+    }
   }
-  std::cout << '\n';
-};
+}
+
+// Draws the pieces, but it is used for when a piece is dragged. It displays the
+// dragged piece on the mouse instead of its source square
+void displayBoardDragging(sf::RenderWindow &window, int draggedPieceRank,
+                          int draggedPieceFile) {
+  sf::RectangleShape square;
+  int hoverFile, hoverRank;
+  hoverRank = sf::Mouse::getPosition(window).y / SQ_SIDE;
+  hoverFile = sf::Mouse::getPosition(window).x / SQ_SIDE;
+  square.setSize(sf::Vector2f(SQ_SIDE, SQ_SIDE));
+  square.setPosition(hoverFile * SQ_SIDE, hoverRank * SQ_SIDE);
+  if ((hoverFile + hoverRank) % 2 == 0) {
+    square.setFillColor(sf::Color(lightSelect.r, lightSelect.g, lightSelect.b));
+  } else {
+    square.setFillColor(sf::Color(darkSelect.r, darkSelect.g, darkSelect.b));
+  }
+  window.draw(square);
+
+  for (int i = 0; i < 8; i++) {
+    for (int j = 0; j < 8; j++) {
+      sf::Sprite piece;
+      char type = board[i][j].type;
+      switch (type) {
+      case 'p':
+        piece.setTexture(p);
+        break;
+      case 'P':
+        piece.setTexture(P);
+        break;
+      case 'r':
+        piece.setTexture(r);
+        break;
+      case 'R':
+        piece.setTexture(R);
+        break;
+      case 'q':
+        piece.setTexture(q);
+        break;
+      case 'Q':
+        piece.setTexture(Q);
+        break;
+      case 'n':
+        piece.setTexture(n);
+        break;
+      case 'N':
+        piece.setTexture(N);
+        break;
+      case 'b':
+        piece.setTexture(b);
+        break;
+      case 'B':
+        piece.setTexture(B);
+        break;
+      case 'k':
+        piece.setTexture(k);
+        break;
+      case 'K':
+        piece.setTexture(K);
+        break;
+      }
+      piece.setPosition(j * SQ_SIDE, i * SQ_SIDE);
+      if (draggedPieceFile == j && draggedPieceRank == i) {
+        continue;
+      }
+      window.draw(piece);
+    }
+  }
+  sf::Sprite piece;
+  char type = board[draggedPieceRank][draggedPieceFile].type;
+  switch (type) {
+  case 'p':
+    piece.setTexture(p);
+    break;
+  case 'P':
+    piece.setTexture(P);
+    break;
+  case 'r':
+    piece.setTexture(r);
+    break;
+  case 'R':
+    piece.setTexture(R);
+    break;
+  case 'q':
+    piece.setTexture(q);
+    break;
+  case 'Q':
+    piece.setTexture(Q);
+    break;
+  case 'n':
+    piece.setTexture(n);
+    break;
+  case 'N':
+    piece.setTexture(N);
+    break;
+  case 'b':
+    piece.setTexture(b);
+    break;
+  case 'B':
+    piece.setTexture(B);
+    break;
+  case 'k':
+    piece.setTexture(k);
+    break;
+  case 'K':
+    piece.setTexture(K);
+    break;
+  }
+  piece.setPosition(sf::Mouse::getPosition(window).x - 50,
+                    sf::Mouse::getPosition(window).y - 50);
+  window.draw(piece);
+}
+
+// Displays a dialog box, asking the user to quit or start a new game
+std::string gameEndBox(sf::RenderWindow &window, std::string text,
+                       bool clicked) {
+  sf::RectangleShape grayOverlay;
+  grayOverlay.setSize(sf::Vector2f(800, 800));
+  grayOverlay.setPosition(0, 0);
+  grayOverlay.setFillColor(sf::Color(0, 0, 0, 128));
+  window.draw(grayOverlay);
+  sf::RectangleShape messageBox;
+  messageBox.setSize(sf::Vector2f(650, 300));
+  messageBox.setPosition(sf::Vector2f(75, 250));
+  messageBox.setFillColor(sf::Color(50, 50, 50));
+  window.draw(messageBox);
+
+  sf::Text title;
+  title.setFont(notoSans);
+  title.setString("Game Ended");
+  title.setCharacterSize(36);
+  title.setFillColor(sf::Color(255, 255, 255));
+  sf::FloatRect titleBounds = title.getGlobalBounds();
+  title.setPosition(sf::Vector2f((800 - titleBounds.width) / (double)2, 270));
+  window.draw(title);
+
+  sf::Text message;
+  message.setFont(notoSans);
+  message.setString(text);
+  message.setCharacterSize(36);
+  message.setFillColor(sf::Color(255, 255, 255));
+  sf::FloatRect messageBounds = message.getGlobalBounds();
+  message.setPosition(
+      sf::Vector2f((800 - messageBounds.width) / (double)2, 330));
+  window.draw(message);
+
+  sf::RectangleShape newGameButton;
+  newGameButton.setSize(sf::Vector2f(150, 50));
+  newGameButton.setPosition(sf::Vector2f(200, 420));
+  newGameButton.setFillColor(sf::Color(50, 50, 50));
+  newGameButton.setOutlineColor(sf::Color(64, 64, 64));
+  newGameButton.setOutlineThickness(2);
+  sf::FloatRect newGameButtonBounds = newGameButton.getLocalBounds();
+  window.draw(newGameButton);
+
+  sf::RectangleShape quitButton;
+  quitButton.setSize(sf::Vector2f(150, 50));
+  quitButton.setPosition(sf::Vector2f(450, 420));
+  quitButton.setFillColor(sf::Color(50, 50, 50));
+  quitButton.setOutlineColor(sf::Color(64, 64, 64));
+  quitButton.setOutlineThickness(2);
+  sf::FloatRect quitButtonBounds = quitButton.getLocalBounds();
+  window.draw(quitButton);
+
+  sf::Text newGameText;
+  newGameText.setFont(notoSans);
+  newGameText.setString("New Game");
+  newGameText.setCharacterSize(25);
+  newGameText.setFillColor(sf::Color(255, 255, 255));
+  sf::FloatRect newGameBounds = newGameText.getLocalBounds();
+  newGameText.setOrigin(newGameBounds.width / (double)2,
+                        newGameBounds.height / (double)2);
+  newGameText.setPosition(sf::Vector2f(
+      newGameButton.getPosition().x + newGameButtonBounds.width / (double)2 - 2,
+      newGameButton.getPosition().y + 20));
+  window.draw(newGameText);
+
+  sf::Text quitText;
+  quitText.setFont(notoSans);
+  quitText.setString("Quit");
+  quitText.setCharacterSize(30);
+  quitText.setFillColor(sf::Color(255, 255, 255));
+  sf::FloatRect quitBounds = quitText.getLocalBounds();
+  quitText.setOrigin(quitBounds.width / (double)2,
+                     quitBounds.height / (double)2);
+  quitText.setPosition(sf::Vector2f(quitButton.getPosition().x +
+                                        quitButtonBounds.width / (double)2 - 5,
+                                    quitButton.getPosition().y + 20));
+  window.draw(quitText);
+  if (quitButton.getGlobalBounds().contains(
+          window.mapPixelToCoords(sf::Mouse::getPosition(window)))) {
+    quitButton.setFillColor(sf::Color(64, 64, 64));
+    if (clicked) {
+      return "quit";
+    }
+  } else {
+    quitButton.setFillColor(sf::Color(50, 50, 50));
+  }
+  window.draw(quitButton);
+  window.draw(quitText);
+
+  if (newGameButton.getGlobalBounds().contains(
+          window.mapPixelToCoords(sf::Mouse::getPosition(window)))) {
+    newGameButton.setFillColor(sf::Color(64, 64, 64));
+    if (clicked) {
+      return "newGame";
+    }
+  } else {
+    newGameButton.setFillColor(sf::Color(50, 50, 50));
+  }
+  window.draw(newGameButton);
+  window.draw(newGameText);
+
+  if (!gameOverSoundAlreadyPlayed) {
+    gameOverSoundAlreadyPlayed = true;
+    buffer.loadFromFile("./assets/ogg/GenericNotify.ogg");
+    sound.setBuffer(buffer);
+    sound.play();
+  }
+  return "null";
+}
 
 int main() {
-  fillBoard();
-  setup();
-  std::cout << "Welcome to chess! No quitting mechanism yet, CTRL+C to quit."
-            << '\n';
-  while (running) {
-    realMove = true;
-    printBoard();
-    std::cout << "Where is the piece?" << '\n';
-    std::string sourceSquare;
-    std::cin >> sourceSquare;
-    std::cout << "Where to move the piece?" << '\n';
-    std::string targetSquare;
-    std::cin >> targetSquare;
-    updateCheckMap();
-    if (itsSafe(sourceSquare) && itsSafe(targetSquare)) {
-      humanMakeMove(sourceSquare, targetSquare);
-    }
-    if (threefoldRepetition()) {
-      std::cout << "\033[2J\033[1;1H" << std::flush;
-      printBoard();
-      running = false;
-      std::cout << "Game ended with a draw by threefold repetition"
-                << std::endl;
-    }
-    if (fiftyMoveCounter >= 100) {
-      std::cout << "\033[2J\033[1;1H" << std::flush;
-      printBoard();
-      running = false;
-      std::cout << "Game ended with a draw by the 50 move rule" << std::endl;
-    }
-
-    if (anyLegalMoves() == false) {
-      std::cout << "\033[2J\033[1;1H" << std::flush;
-      std::cout << "Game ended" << std::endl;
-      printBoard();
+  notoSans.loadFromFile("./assets/NotoSans-VariableFont_wdth,wght.ttf");
+  loadTextures();
+  bool firstClickMade = false;
+  sf::Vector2i sourceClickPos;
+  sf::Vector2i targetClickPos;
+  sf::RenderWindow window(sf::VideoMode(800, 800), "Chess",
+                          sf::Style::Titlebar | sf::Style::Close);
+  window.setFramerateLimit(120);
+  sf::Image icon;
+  icon.loadFromFile("./assets/icon.png");
+  window.setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
+  while (window.isOpen()) {
+    waitingForPromotion = false;
+    positionHistory.clear();
+    fillBoard();
+    setup();
+    whitesMove = true;
+    halfMove = 0;
+    fiftyMoveCounter = 0;
+    std::string gameEndBoxOutput = "";
+    gameOverSoundAlreadyPlayed = false;
+    while (true) {
+      realMove = true;
+      int fromRank, fromFile, toRank, toFile;
+      displayBackground(window);
+      sf::RectangleShape checkHighlight;
+      checkHighlight.setSize(sf::Vector2f(SQ_SIDE, SQ_SIDE));
+      checkHighlight.setFillColor(sf::Color(210, 70, 50));
       if (board[kingRank(true)][kingFile(true)].inBlacksCheck) {
-        std::cout << "Black wins by mate" << std::endl;
-        running = false;
-      } else if (board[kingRank(false)][kingFile(false)].inWhitesCheck) {
-        std::cout << "White wins by mate" << std::endl;
-        running = false;
-      } else {
-        std::cout << "Draw by stalemate" << std::endl;
-        running = false;
+        checkHighlight.setPosition(
+            sf::Vector2f(kingFile(true) * SQ_SIDE, kingRank(true) * SQ_SIDE));
+        window.draw(checkHighlight);
       }
-    }
-    if (insufficientMaterial()) {
-      running = false;
-      std::cout << "\033[2J\033[1;1H" << std::flush;
-      printBoard();
-      std::cout << "Game ended with a draw by insufficient mating material"
-                << std::endl;
-    }
-    // This piece of gibberish is apparently an escape code for clearing the
-    // terminal
-    if (running) {
-      std::cout << "\033[2J\033[1;1H" << std::flush;
+      if (board[kingRank(false)][kingFile(false)].inWhitesCheck) {
+        checkHighlight.setPosition(
+            sf::Vector2f(kingFile(false) * SQ_SIDE, kingRank(false) * SQ_SIDE));
+        window.draw(checkHighlight);
+      }
+
+      if (halfMove > 0) {
+        sf::RectangleShape source;
+        source.setSize(sf::Vector2f(SQ_SIDE, SQ_SIDE));
+        source.setPosition(
+            sf::Vector2f(lastFromFile * SQ_SIDE, lastFromRank * SQ_SIDE));
+        if ((lastFromFile + lastFromRank) % 2 == 0) {
+          source.setFillColor(
+              sf::Color(lightHighlight.r, lightHighlight.g, lightHighlight.b));
+        } else {
+          source.setFillColor(
+              sf::Color(darkHighlight.r, darkHighlight.g, darkHighlight.b));
+        }
+        window.draw(source);
+        sf::RectangleShape target;
+        target.setSize(sf::Vector2f(SQ_SIDE, SQ_SIDE));
+        target.setPosition(
+            sf::Vector2f(lastToFile * SQ_SIDE, lastToRank * SQ_SIDE));
+        if ((lastToFile + lastToRank) % 2 == 0) {
+          target.setFillColor(
+              sf::Color(lightHighlight.r, lightHighlight.g, lightHighlight.b));
+        } else {
+          target.setFillColor(
+              sf::Color(darkHighlight.r, darkHighlight.g, darkHighlight.b));
+        }
+        window.draw(target);
+      }
+      if (firstClickMade && board[fromRank][fromFile].type != '.' &&
+          board[fromRank][fromFile].isWhite == whitesMove) {
+        // click highlighting
+        sf::RectangleShape square;
+        square.setSize(sf::Vector2f(SQ_SIDE, SQ_SIDE));
+        square.setPosition(fromFile * SQ_SIDE, fromRank * SQ_SIDE);
+        if ((fromFile + fromRank) % 2 == 0) {
+          square.setFillColor(
+              sf::Color(lightSelect.r, lightSelect.g, lightSelect.b));
+        } else {
+          square.setFillColor(
+              sf::Color(darkSelect.r, darkSelect.g, darkSelect.b));
+        }
+        window.draw(square);
+      }
+      if (dragging) {
+        displayBoardDragging(window, fromRank, fromFile);
+      } else {
+        displayBoard(window);
+      }
+      sf::Event event;
+      bool clicked = false;
+      while (window.pollEvent(event)) {
+        if (event.type == sf::Event::Closed) {
+          window.close();
+        }
+        if (event.type == sf::Event::MouseButtonPressed) {
+          if (event.mouseButton.button == sf::Mouse::Left) {
+            clicked = true;
+            if (!firstClickMade) {
+              sourceClickPos = sf::Mouse::getPosition(window);
+              firstClickMade = !firstClickMade;
+              fromRank = sourceClickPos.y / SQ_SIDE;
+              fromFile = sourceClickPos.x / SQ_SIDE;
+            } else {
+              targetClickPos = sf::Mouse::getPosition(window);
+              toRank = targetClickPos.y / SQ_SIDE;
+              toFile = targetClickPos.x / SQ_SIDE;
+              int currentHalfMove = halfMove;
+              checkMove(fromRank, fromFile, toRank, toFile);
+              if (currentHalfMove == halfMove) {
+                sourceClickPos = sf::Mouse::getPosition(window);
+                fromRank = sourceClickPos.y / SQ_SIDE;
+                fromFile = sourceClickPos.x / SQ_SIDE;
+              } else {
+                firstClickMade = !firstClickMade;
+              }
+            }
+          }
+        }
+        if (event.type == sf::Event::MouseButtonReleased &&
+            event.mouseButton.button == sf::Mouse::Left && firstClickMade &&
+            (std::abs(sourceClickPos.x - sf::Mouse::getPosition(window).x) >
+                 10 ||
+             std::abs(sourceClickPos.y - sf::Mouse::getPosition(window).y) >
+                 10)) {
+          targetClickPos = sf::Mouse::getPosition(window);
+          toRank = targetClickPos.y / SQ_SIDE;
+          toFile = targetClickPos.x / SQ_SIDE;
+          checkMove(fromRank, fromFile, toRank, toFile);
+          firstClickMade = !firstClickMade;
+        }
+      }
+      if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) &&
+          firstClickMade &&
+          (std::abs(sourceClickPos.x - sf::Mouse::getPosition(window).x) > 10 ||
+           std::abs(sourceClickPos.y - sf::Mouse::getPosition(window).y) >
+               10)) {
+        dragging = true;
+      } else {
+        dragging = false;
+      }
+      if (waitingForPromotion) {
+        bool whitePromotion = board[lastToRank][lastToFile].isWhite;
+        char promotionChoice =
+            promotionBox(window, clicked, whitePromotion, lastToFile);
+        if (promotionChoice != ' ') {
+          board[lastToRank][lastToFile].type =
+              board[lastToRank][lastToFile].isWhite
+                  ? std::toupper(promotionChoice)
+                  : std::tolower(promotionChoice);
+          waitingForPromotion = false;
+        }
+      }
+      if (threefoldRepetition()) {
+        gameEndBoxOutput = gameEndBox(
+            window, "Draw by threefold position repetition", clicked);
+      }
+      if (fiftyMoveCounter >= 100) {
+        gameEndBoxOutput =
+            gameEndBox(window, "Draw by fifty move rule", clicked);
+      }
+
+      if (anyLegalMoves() == false) {
+        if (board[kingRank(true)][kingFile(true)].inBlacksCheck) {
+          gameEndBoxOutput = gameEndBox(window, "Black wins by mate", clicked);
+        } else if (board[kingRank(false)][kingFile(false)].inWhitesCheck) {
+          gameEndBoxOutput = gameEndBox(window, "White wins by mate", clicked);
+        } else {
+          gameEndBoxOutput = gameEndBox(window, "Draw by stalemate", clicked);
+        }
+      }
+      if (insufficientMaterial()) {
+        gameEndBoxOutput =
+            gameEndBox(window, "Draw by insufficient mating material", clicked);
+      }
+      window.display();
+      if (gameEndBoxOutput == "quit") {
+        window.close();
+        return 0;
+      }
+      if (gameEndBoxOutput == "newGame") {
+        break;
+      }
     }
   }
   return 0;
