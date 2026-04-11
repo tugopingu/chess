@@ -516,7 +516,7 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
           whitesMove = !whitesMove;
         }
       }
-      if (realMove) {
+      if (realMove && currentHalfMove == halfMove - 1) {
         lastFromRank = fromRank;
         lastFromFile = fromFile;
         lastToRank = toRank;
@@ -545,7 +545,7 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
           whitesMove = !whitesMove;
         }
       }
-      if (realMove) {
+      if (realMove && currentHalfMove == halfMove - 1) {
         lastFromRank = fromRank;
         lastFromFile = fromFile;
         lastToRank = toRank;
