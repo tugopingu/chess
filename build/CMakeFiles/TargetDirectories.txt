@@ -1,0 +1,3 @@
+/home/tuna/Projects/C++/chess/build/CMakeFiles/chess.dir
+/home/tuna/Projects/C++/chess/build/CMakeFiles/edit_cache.dir
+/home/tuna/Projects/C++/chess/build/CMakeFiles/rebuild_cache.dir

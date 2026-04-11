@@ -33,19 +33,19 @@ sf::Texture p, r, k, q, b, n;
 sf::Texture P, R, K, Q, B, N;
 
 void loadTextures() {
-  p.loadFromFile("./assets/png/black/p.png");
-  r.loadFromFile("./assets/png/black/r.png");
-  k.loadFromFile("./assets/png/black/k.png");
-  q.loadFromFile("./assets/png/black/q.png");
-  b.loadFromFile("./assets/png/black/b.png");
-  n.loadFromFile("./assets/png/black/n.png");
+  p.loadFromFile("../assets/png/black/p.png");
+  r.loadFromFile("../assets/png/black/r.png");
+  k.loadFromFile("../assets/png/black/k.png");
+  q.loadFromFile("../assets/png/black/q.png");
+  b.loadFromFile("../assets/png/black/b.png");
+  n.loadFromFile("../assets/png/black/n.png");
 
-  P.loadFromFile("./assets/png/white/P.png");
-  R.loadFromFile("./assets/png/white/R.png");
-  K.loadFromFile("./assets/png/white/K.png");
-  Q.loadFromFile("./assets/png/white/Q.png");
-  B.loadFromFile("./assets/png/white/B.png");
-  N.loadFromFile("./assets/png/white/N.png");
+  P.loadFromFile("../assets/png/white/P.png");
+  R.loadFromFile("../assets/png/white/R.png");
+  K.loadFromFile("../assets/png/white/K.png");
+  Q.loadFromFile("../assets/png/white/Q.png");
+  B.loadFromFile("../assets/png/white/B.png");
+  N.loadFromFile("../assets/png/white/N.png");
 }
 const Color lightSquare(240, 217, 181);
 const Color darkSquare(181, 136, 99);
@@ -284,9 +284,9 @@ void makeMove(int fromRank, int fromFile, int toRank, int toFile) {
     lastToRank = toRank;
     lastToFile = toFile;
     if (isCapture) {
-      buffer.loadFromFile("./assets/ogg/Capture.ogg");
+      buffer.loadFromFile("../assets/ogg/Capture.ogg");
     } else {
-      buffer.loadFromFile("./assets/ogg/Move.ogg");
+      buffer.loadFromFile("../assets/ogg/Move.ogg");
     }
     sound.setBuffer(buffer);
     sound.play();
@@ -585,7 +585,7 @@ void checkMove(int fromRank, int fromFile, int toRank, int toFile) {
         makeMove(fromRank, fromFile, toRank, toFile);
         board[toRank + colorMult][toFile] = Piece();
         if (realMove) {
-          buffer.loadFromFile("./assets/ogg/Capture.ogg");
+          buffer.loadFromFile("../assets/ogg/Capture.ogg");
           sound.setBuffer(buffer);
           sound.play();
         }
@@ -1325,7 +1325,7 @@ std::string gameEndBox(sf::RenderWindow &window, std::string text,
 
   if (!gameOverSoundAlreadyPlayed) {
     gameOverSoundAlreadyPlayed = true;
-    buffer.loadFromFile("./assets/ogg/GenericNotify.ogg");
+    buffer.loadFromFile("../assets/ogg/GenericNotify.ogg");
     sound.setBuffer(buffer);
     sound.play();
   }
@@ -1333,7 +1333,7 @@ std::string gameEndBox(sf::RenderWindow &window, std::string text,
 }
 
 int main() {
-  notoSans.loadFromFile("./assets/NotoSans-VariableFont_wdth,wght.ttf");
+  notoSans.loadFromFile("../assets/NotoSans-VariableFont_wdth,wght.ttf");
   loadTextures();
   bool firstClickMade = false;
   sf::Vector2i sourceClickPos;
@@ -1342,7 +1342,7 @@ int main() {
                           sf::Style::Titlebar | sf::Style::Close);
   window.setFramerateLimit(120);
   sf::Image icon;
-  icon.loadFromFile("./assets/icon.png");
+  icon.loadFromFile("../assets/icon.png");
   window.setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
   while (window.isOpen()) {
     waitingForPromotion = false;
