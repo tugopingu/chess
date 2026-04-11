@@ -1422,7 +1422,9 @@ int main() {
       bool clicked = false;
       while (window.pollEvent(event)) {
         if (event.type == sf::Event::Closed) {
+          sound.stop();
           window.close();
+          return 0;
         }
         if (event.type == sf::Event::MouseButtonPressed) {
           if (event.mouseButton.button == sf::Mouse::Left) {
@@ -1506,6 +1508,7 @@ int main() {
       }
       window.display();
       if (gameEndBoxOutput == "quit") {
+        sound.stop();
         window.close();
         return 0;
       }
