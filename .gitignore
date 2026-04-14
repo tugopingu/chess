@@ -1,2 +1,6 @@
 build/
 assets/svg/
+build-win/
+chess-win minimal/
+chess-win minimal.zip
+.swp

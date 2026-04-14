@@ -16,7 +16,6 @@
 
 const int WIDTH = 800;
 const int SQ_SIDE = 100;
-const int PIECE_OFFSET = (100 - 75) / 2;
 
 struct Color {
   int r;
@@ -94,15 +93,6 @@ public:
   // Empty square
   Piece() { this->type = '.'; };
 };
-
-// Overloaded functions, used to convert algebraic notation to matrix indexes
-int fileConv(char file) { return file - 'a'; };
-
-char fileConv(int file) { return 'a' + file; };
-
-int rankConv(char rank) { return '8' - rank; };
-
-char rankConv(int rank) { return 56 - rank; }
 
 Piece board[8][8];
 Piece backupboard[8][8];
