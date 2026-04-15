@@ -1,0 +1,105 @@
+name: Build All Platforms
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: chess-linux
+            output: build/chess
+
+          - os: windows-latest
+            artifact: chess-windows
+            output: build/chess.exe
+
+          - os: macos-latest
+            artifact: chess-macos
+            output: chess-bundle
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- Linux ----------
+      - name: Install SFML (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt install -y libsfml-dev
+
+      - name: Configure (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: cmake --build build
+
+      # ---------- Windows ----------
+      - name: Install SFML (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install sfml
+
+      - name: Configure (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cmake --build build --config Release
+
+      - name: Copy DLLs (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir chess-windows
+          cp build/Release/chess.exe chess-windows/
+          cp C:/ProgramData/chocolatey/lib/sfml/tools/SFML-*/bin/*.dll chess-windows/
+
+      # ---------- macOS ----------
+      - name: Install SFML (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install sfml
+
+      - name: Configure (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cmake --build build
+
+      - name: Bundle dylibs (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          mkdir chess-bundle
+          cp build/chess chess-bundle/
+          cp /opt/homebrew/lib/libsfml-*.dylib chess-bundle/ 2>/dev/null || \
+          cp /usr/local/lib/libsfml-*.dylib chess-bundle/
+          install_name_tool -add_rpath @executable_path chess-bundle/chess
+
+      # ---------- Upload ----------
+      - name: Upload artifact (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chess-linux
+          path: build/chess
+
+      - name: Upload artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chess-windows
+          path: chess-windows/
+
+      - name: Upload artifact (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chess-macos
+          path: chess-bundle/
