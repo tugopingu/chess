@@ -42,11 +42,11 @@ jobs:
       # ---------- Windows ----------
       - name: Download SFML (Windows)
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
-          curl -L -o sfml.zip https://github.com/SFML/SFML/releases/download/2.6.2/SFML-2.6.2-windows-gcc-13.1.0-mingw-64-bit.zip
+          curl.exe -L -o sfml.zip https://github.com/SFML/SFML/releases/download/2.6.2/SFML-2.6.2-windows-gcc-13.1.0-mingw-64-bit.zip
           7z x sfml.zip
-          Rename-Item "SFML-2.6.2-windows-gcc-13.1.0-mingw-64-bit" "SFML-2.6.2"
-
+          Rename-Item -Path "SFML-2.6.2-windows-gcc-13.1.0-mingw-64-bit" -NewName "SFML-2.6.2"
       - name: Configure (Windows)
         if: matrix.os == 'windows-latest'
         run: |
