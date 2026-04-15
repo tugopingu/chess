@@ -12,16 +12,8 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: chess-linux
-            output: build/chess
-
           - os: windows-latest
-            artifact: chess-windows
-            output: build/chess.exe
-
           - os: macos-latest
-            artifact: chess-macos
-            output: chess-bundle
 
     steps:
       - name: Checkout
@@ -40,14 +32,25 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: cmake --build build
 
+      - name: Upload artifact (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chess-linux
+          path: build/chess
+
       # ---------- Windows ----------
-      - name: Install SFML (Windows)
+      - name: Download SFML (Windows)
         if: matrix.os == 'windows-latest'
-        run: choco install sfml
+        run: |
+          curl -L -o sfml.zip https://github.com/SFML/SFML/releases/download/2.6.2/SFML-2.6.2-windows-gcc-mingw-w64-64-bit.zip
+          7z x sfml.zip
 
       - name: Configure (Windows)
         if: matrix.os == 'windows-latest'
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release `
+            -DSFML_DIR="$PWD/SFML-2.6.2/lib/cmake/SFML"
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
@@ -58,7 +61,14 @@ jobs:
         run: |
           mkdir chess-windows
           cp build/Release/chess.exe chess-windows/
-          cp C:/ProgramData/chocolatey/lib/sfml/tools/SFML-*/bin/*.dll chess-windows/
+          cp SFML-2.6.2/bin/*.dll chess-windows/
+
+      - name: Upload artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chess-windows
+          path: chess-windows/
 
       # ---------- macOS ----------
       - name: Install SFML (macOS)
@@ -81,21 +91,6 @@ jobs:
           cp /opt/homebrew/lib/libsfml-*.dylib chess-bundle/ 2>/dev/null || \
           cp /usr/local/lib/libsfml-*.dylib chess-bundle/
           install_name_tool -add_rpath @executable_path chess-bundle/chess
-
-      # ---------- Upload ----------
-      - name: Upload artifact (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: chess-linux
-          path: build/chess
-
-      - name: Upload artifact (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: chess-windows
-          path: chess-windows/
 
       - name: Upload artifact (macOS)
         if: matrix.os == 'macos-latest'
