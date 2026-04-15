@@ -43,13 +43,14 @@ jobs:
       - name: Download SFML (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          curl -L -o sfml.zip https://github.com/SFML/SFML/releases/download/2.6.2/SFML-2.6.2-windows-gcc-mingw-w64-64-bit.zip
+          curl -L -o sfml.zip https://github.com/SFML/SFML/releases/download/2.6.2/SFML-2.6.2-windows-gcc-13.1.0-mingw-64-bit.zip
           7z x sfml.zip
+          Rename-Item "SFML-2.6.2-windows-gcc-13.1.0-mingw-64-bit" "SFML-2.6.2"
 
       - name: Configure (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release `
+          cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release `
             -DSFML_DIR="$PWD/SFML-2.6.2/lib/cmake/SFML"
 
       - name: Build (Windows)
@@ -60,7 +61,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           mkdir chess-windows
-          cp build/Release/chess.exe chess-windows/
+          cp build/chess.exe chess-windows/
           cp SFML-2.6.2/bin/*.dll chess-windows/
 
       - name: Upload artifact (Windows)
@@ -69,7 +70,6 @@ jobs:
         with:
           name: chess-windows
           path: chess-windows/
-
       # ---------- macOS ----------
       - name: Install SFML (macOS)
         if: matrix.os == 'macos-latest'
