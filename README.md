@@ -1,1 +1,1 @@
-This is my hobby project I made to learn about programming, C++ and graphics libraries. All assets are from Lichess. The dependencies are the SFML libraries.
+This is my hobby project I made to learn about programming, C++ and graphics libraries. All assets are from Lichess. The dependencies are the SFML libraries. If you want to try out the program without building from source yourself, here is the windows binary: https://www.mediafire.com/file/jnl9p62twfgwbaf/chess.zip/file
